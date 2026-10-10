@@ -4,6 +4,7 @@ import {
   ShieldCheck, MessageCircle, Sparkles, ChevronDown, Smartphone, MousePointer2, Send,
   Eye, Shield, CreditCard
 } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 // ==========================================
 // 1. CONFIGURATION & DATABASE
@@ -38,8 +39,8 @@ const PRODUCTS = [
     oldPrice: 70,
     rating: 4.9,
     reviewsCount: 160,
- description: 'بطاقة PVC فاخرة بحجم البطاقة البنكية. مناسبة لمن يخدم العميل أثناء الانتظار، أو موظفي الاستقبال ومناديب التوصيل لطلب التقييم أينما تواجدوا.',
-longDescription: 'الحل الأمثل لمن يخدم العميل أثناء الانتظار والكوادر المتنقلة! بطاقة ذكية بحجم وشعور البطاقة الائتمانية الكلاسيكية. يمكن لمقدم الخدمة أو موظف الاستقبال أو مندوب التوصيل حملها بسهولة لطلب التقييم فور انتهاء الخدمة وبلمسة واحدة.',
+    description: 'بطاقة PVC فاخرة بحجم البطاقة البنكية. مناسبة لمن يخدم العميل أثناء الانتظار، أو موظفي الاستقبال ومناديب التوصيل لطلب التقييم أينما تواجدوا.',
+    longDescription: 'الحل الأمثل لمن يخدم العميل أثناء الانتظار والكوادر المتنقلة! بطاقة ذكية بحجم وشعور البطاقة الائتمانية الكلاسيكية. يمكن لمقدم الخدمة أو موظف الاستقبال أو مندوب التوصيل حملها بسهولة لطلب التقييم فور انتهاء الخدمة وبلمسة واحدة.',
     image: '/card.png',
     badge: '',
     stockStatus: 'متوفر',
@@ -76,9 +77,9 @@ longDescription: 'الحل الأمثل لمن يخدم العميل أثناء 
     oldPrice: 60,
     rating: 5.0,
     reviewsCount: 58,
-description: 'بطاقات ذكية سادة سوداء، نبرمجها لك مسبقا على رابط من اختيارك.',
-longDescription: 'أطلق العنان لإبداعك التقني! بطاقات ذكية سادة ونظيفة تماماً تلبي كافة احتياجاتك. نبرمجها لك مسبقا على رابط من اختيارك.',
-image: '/blank.png',
+    description: 'بطاقات ذكية سادة سوداء، نبرمجها لك مسبقا على رابط من اختيارك.',
+    longDescription: 'أطلق العنان لإبداعك التقني! بطاقات ذكية سادة ونظيفة تماماً تلبي كافة احتياجاتك. نبرمجها لك مسبقا على رابط من اختيارك.',
+    image: '/blank.png',
     badge: 'الأعلى تقييما',
     stockStatus: 'متوفر',
     features: [
@@ -104,10 +105,8 @@ export default function App() {
   const [cart, setCart] = useState(() => {
     try { return JSON.parse(localStorage.getItem('tq_cart')) || []; } catch { return []; }
   });
-  const [reviews, setReviews] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('tq_reviews')) || []; } catch { return []; }
-  });
   
+  const [reviews, setReviews] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
@@ -116,7 +115,16 @@ export default function App() {
   const [reviewForm, setReviewForm] = useState({ name: '', role: '', text: '', rating: 5 });
 
   useEffect(() => { localStorage.setItem('tq_cart', JSON.stringify(cart)); }, [cart]);
-  useEffect(() => { localStorage.setItem('tq_reviews', JSON.stringify(reviews)); }, [reviews]);
+  
+  useEffect(() => {
+    fetchReviews();
+  }, []);
+
+  async function fetchReviews() {
+    const { data, error } = await supabase.from('reviews').select('*').order('id', { ascending: false });
+    if (error) console.log('خطأ في جلب التعليقات:', error);
+    else setReviews(data || []);
+  }
   
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -165,9 +173,46 @@ export default function App() {
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
+  // ==========================================
+  // دالة الدفع الإلكتروني عبر مويسار
+  // ==========================================
+  const handleElectronicPay1 = async () => {
+    if (!cart.length) return;
+
+    try {
+      showToast('جاري تجهيز صفحة الدفع الآمنة...', 'success');
+      
+      const response = await fetch('/moyasar-api/v1/invoices', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Basic ' + btoa('sk_live_JLnbKm7AEXP1ndPenjWbCRn6nfZUYwKrqqDmAWC2:')
+        },
+        body: JSON.stringify({
+          amount: cartTotal * 100,
+          currency: 'SAR',
+          description: 'مشتريات من متجر وصول - Wosol',
+          back_url: window.location.href
+        })
+      });
+
+      const invoice = await response.json();
+
+      if (invoice.url) {
+        window.location.href = invoice.url; 
+      } else {
+        showToast('تعذر إعداد رابط الدفع، تأكد من مفتاح sk_live', 'error');
+        console.error('تفاصيل الخطأ من مويسار:', invoice);
+      }
+    } catch (error) {
+      console.error('خطأ في الاتصال بالشبكة:', error);
+      showToast('حدث خطأ في الشبكة، يرجى المحاولة لاحقاً', 'error');
+    }
+  };
+
   const checkoutWhatsApp = () => {
     if (!cart.length) return;
-    let text = `*طلب جديد من Taqeemak* 🌟\n\n`;
+    let text = `*طلب جديد من Wosol* 🌟\n\n`;
     cart.forEach((item, i) => {
       text += `${i + 1}. ${item.name} (الكمية: ${item.qty})\n`;
     });
@@ -177,23 +222,34 @@ export default function App() {
     window.open(`https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const handleElectronicPay1 = () => {
-    if (!cart.length) return;
-    window.open('https://pay.example.com/invoice1', '_blank');
-  };
-
   const handleElectronicPay2 = () => {
     if (!cart.length) return;
-    window.open('https://pay.example.com/invoice2', '_blank');
+    let text = `*طلب تحويل بنكي (مصرف الراجحي) - Wosol* 🌟\n\n`;
+    cart.forEach((item, i) => {
+      text += `${i + 1}. ${item.name} (الكمية: ${item.qty})\n`;
+    });
+    text += `\nالإجمالي: ${cartTotal} ${CURRENCY}\n`;
+    text += `البنك: مصرف الراجحي\nرقم الآيبان المحول إليه: SA74 8000 0542 6080 1601 5013 \n\nهذا إيصال التحويل:`;
+    window.open(`https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const submitReview = (e) => {
+  const submitReview = async (e) => {
     e.preventDefault();
     if (!reviewForm.name || !reviewForm.text) return showToast('أكمل البيانات', 'error');
-    const newRev = { ...reviewForm, id: Date.now(), date: new Date().toLocaleDateString('ar-SA') };
-    setReviews([newRev, ...reviews]);
-    setReviewForm({ name: '', role: '', text: '', rating: 5 });
-    showToast('تم نشر تقييمك بنجاح!');
+    
+    const { error } = await supabase.from('reviews').insert([{
+      name: reviewForm.name,
+      comment: reviewForm.text,
+      rating: Number(reviewForm.rating)
+    }]);
+
+    if (error) {
+      showToast('حدث خطأ أثناء إرسال التقييم', 'error');
+    } else {
+      setReviewForm({ name: '', role: '', text: '', rating: 5 });
+      fetchReviews();
+      showToast('تم نشر تقييمك بنجاح!');
+    }
   };
 
   return (
@@ -618,7 +674,7 @@ export default function App() {
               <Nfc size={24} strokeWidth={2.5} />
             </div>
             <div className="brand-text">
-              <h1>Taqeemak</h1>
+              <h1>Wosol</h1>
               <p>لمسة تترك أثر</p>
             </div>
           </a>
@@ -668,7 +724,7 @@ export default function App() {
                 <div className="v-icon"><Zap size={24} /></div>
                 <div className="v-text">
                   <h4>جاهزة للعمل فوراً</h4>
-                  <p>نبرمج الأجهزة مسبقاً على رابط نشاطك التجاري لتستلمها جاهزة ومختبرة 100%.</p>
+                  <p>نبرمج الأجهزة مسبقاً على رابط نشاط التجاري لتستلمها جاهزة ومختبرة 100%.</p>
                 </div>
               </div>
             </div>
@@ -800,7 +856,7 @@ export default function App() {
           <div className="container">
             <div className="sec-header">
               <h2>آراء شركاء النجاح</h2>
-              <p>اقرأ تجارب أصحاب الأنشطة التجارية، أو شاركنا تجربتك لتظهر هنا فوراً!</p>
+              <p>اقرأ تجارب أصحاب الأنشطة التجارية، أو شاركنا تجربتك لتظهر هنا فوراً لجميع الزوار!</p>
             </div>
             
             <div className="reviews-grid">
@@ -857,14 +913,14 @@ export default function App() {
                     <p>لا توجد تقييمات حالياً. كن أول من يشاركنا نجاحه وتجربته اليوم!</p>
                   </div>
                 ) : (
-                  reviews.map((r) => (
-                    <div key={r.id} className="review-card">
+                  reviews.map((r, index) => (
+                    <div key={r.id || index} className="review-card">
                       <div className="r-stars">
-                        {[...Array(r.rating)].map((_, i) => <Star key={i} size={16} fill="currentColor" />)}
+                        {[...Array(r.rating || 5)].map((_, i) => <Star key={i} size={16} fill="currentColor" />)}
                       </div>
-                      <p className="r-text">"{r.text}"</p>
+                      <p className="r-text">"{r.comment || r.text}"</p>
                       <div className="r-author">
-                        <div className="r-avatar">{r.name.charAt(0)}</div>
+                        <div className="r-avatar">{r.name ? r.name.charAt(0) : 'ع'}</div>
                         <div className="r-info">
                           <h5>{r.name}</h5>
                           <span>{r.role || 'عميل معتمد'}</span>
@@ -903,7 +959,7 @@ export default function App() {
       <footer className="footer">
         <div className="container">
           <div className="footer-logo">
-            <Nfc size={24} /> Taqeemak
+          <Nfc size={24} /> Wosol
           </div>
           <p>جميع الحقوق محفوظة © 2026 - الحلول التقنية المتقدمة لجمع التقييمات عبر NFC (أبها وخميس مشيط).</p>
           <p style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-300)' }}>
@@ -961,13 +1017,13 @@ export default function App() {
               🤝 متوفر خدمة الدفع عند التسليم
             </p>
             <button className="checkout-whatsapp" onClick={checkoutWhatsApp}>
-              إتمام الطلب الفوري عبر واتساب <MessageCircle size={20} />
+             (للدفع عند الاستلام) إتمام الطلب الفوري عبر واتساب <MessageCircle size={20} />
             </button>
             <button className="checkout-epay" onClick={handleElectronicPay1}>
-              الدفع الإلكتروني (1) - بطاقة / أبل باي <CreditCard size={18} />
+              الدفع الإلكتروني - بطاقة / أبل باي <CreditCard size={18} />
             </button>
             <button className="checkout-epay" onClick={handleElectronicPay2}>
-              الدفع الإلكتروني (2) - تحويل / الراجحي <CreditCard size={18} />
+              الدفع عبر تحويل مصرف الراجحي (واتساب) <CreditCard size={18} />
             </button>
           </div>
         )}

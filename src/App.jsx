@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Nfc, ShoppingCart, Plus, Minus, Trash2, X, Check, Star, MapPin, Truck, Zap,
@@ -179,6 +180,11 @@ export default function App() {
   const handleElectronicPay1 = async () => {
     if (!cart.length) return;
 
+    // تم تعطيل الدفع الإلكتروني مؤقتاً
+    showToast('عذراً، خدمات الدفع الإلكتروني متوقفة مؤقتاً. يرجى استخدام الدفع عند الاستلام.', 'error');
+    return;
+
+    /*
     try {
       showToast('جاري تجهيز صفحة الدفع الآمنة...', 'success');
       
@@ -186,7 +192,7 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + btoa('sk_live_JLnbKm7AEXP1ndPenjWbCRn6nfZUYwKrqqDmAWC2:')
+          'Authorization': 'Basic ' + btoa(import.meta.env.VITE_MOYASAR_SECRET_KEY + ':')
         },
         body: JSON.stringify({
           amount: cartTotal * 100,
@@ -201,35 +207,50 @@ export default function App() {
       if (invoice.url) {
         window.location.href = invoice.url; 
       } else {
-        showToast('تعذر إعداد رابط الدفع، تأكد من مفتاح sk_live', 'error');
+        showToast('تعذر إعداد رابط الدفع', 'error');
         console.error('تفاصيل الخطأ من مويسار:', invoice);
       }
     } catch (error) {
       console.error('خطأ في الاتصال بالشبكة:', error);
       showToast('حدث خطأ في الشبكة، يرجى المحاولة لاحقاً', 'error');
     }
+    */
   };
 
   const checkoutWhatsApp = () => {
     if (!cart.length) return;
-    let text = `*طلب جديد من Wosol* 🌟\n\n`;
+    let text = `*طلب جديد من Wosol* 🌟
+
+`;
     cart.forEach((item, i) => {
-      text += `${i + 1}. ${item.name} (الكمية: ${item.qty})\n`;
+      text += `${i + 1}. ${item.name} (الكمية: ${item.qty})
+`;
     });
-    text += `\nالإجمالي: ${cartTotal} ${CURRENCY}\n`;
-    text += `الموقع: أبها / خميس مشيط\n`;
+    text += `
+الإجمالي: ${cartTotal} ${CURRENCY}
+`;
+    text += `الموقع: أبها / خميس مشيط
+`;
     text += `💳 طريقة الدفع: الدفع عند التسليم`;
     window.open(`https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleElectronicPay2 = () => {
     if (!cart.length) return;
-    let text = `*طلب تحويل بنكي (مصرف الراجحي) - Wosol* 🌟\n\n`;
+    let text = `*طلب تحويل بنكي (مصرف الراجحي) - Wosol* 🌟
+
+`;
     cart.forEach((item, i) => {
-      text += `${i + 1}. ${item.name} (الكمية: ${item.qty})\n`;
+      text += `${i + 1}. ${item.name} (الكمية: ${item.qty})
+`;
     });
-    text += `\nالإجمالي: ${cartTotal} ${CURRENCY}\n`;
-    text += `البنك: مصرف الراجحي\nرقم الآيبان المحول إليه: SA74 8000 0542 6080 1601 5013 \n\nهذا إيصال التحويل:`;
+    text += `
+الإجمالي: ${cartTotal} ${CURRENCY}
+`;
+    text += `البنك: مصرف الراجحي
+رقم الآيبان المحول إليه: SA74 8000 0542 6080 1601 5013 
+
+هذا إيصال التحويل:`;
     window.open(`https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -615,12 +636,15 @@ export default function App() {
         .checkout-whatsapp:hover { background: #1ebd5a; transform: translateY(-2px); }
 
         .checkout-epay { 
-          width: 100%; background: var(--bg-surface); color: white; border: 1px solid var(--border-light); 
+          width: 100%; background: var(--bg-surface); color: var(--text-300); border: 1px solid var(--border-light); 
           padding: 14px; border-radius: var(--radius-sm); font-size: 14.5px; font-weight: 800; display: flex; 
-          align-items: center; justify-content: center; gap: 10px; cursor: pointer; 
+          align-items: center; justify-content: center; gap: 10px; cursor: not-allowed; 
           transition: var(--trans-fast); margin-bottom: 10px;
         }
-        .checkout-epay:hover { background: var(--bg-elevated); border-color: var(--brand-primary); transform: translateY(-2px); }
+
+        .checkout-epay-msg {
+          text-align: center; font-size: 12px; color: #ef4444; margin-bottom: 10px; font-weight: 700;
+        }
 
         .footer { border-top: 1px solid var(--border-light); padding: 40px 0; background: var(--bg-main); text-align: center; }
         .footer-logo { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--brand-primary); font-weight: 900; font-size: 22px; margin-bottom: 16px; }
@@ -1019,11 +1043,12 @@ export default function App() {
             <button className="checkout-whatsapp" onClick={checkoutWhatsApp}>
              (للدفع عند الاستلام) إتمام الطلب الفوري عبر واتساب <MessageCircle size={20} />
             </button>
-            <button className="checkout-epay" onClick={handleElectronicPay1}>
+            <p className="checkout-epay-msg">عذراً، خدمات الدفع الإلكتروني متوقفة مؤقتاً</p>
+            <button className="checkout-epay" disabled>
               الدفع الإلكتروني - بطاقة / أبل باي <CreditCard size={18} />
             </button>
-            <button className="checkout-epay" onClick={handleElectronicPay2}>
-              الدفع عبر تحويل مصرف الراجحي (واتساب) <CreditCard size={18} />
+            <button className="checkout-epay" disabled>
+              الدفع عبر تحويل مصرف الراجحي <CreditCard size={18} />
             </button>
           </div>
         )}
